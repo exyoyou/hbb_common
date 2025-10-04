@@ -612,6 +612,19 @@ impl TransferJob {
         }
     }
 
+    #[inline]
+    pub fn set_finished_size_on_resume(&mut self) {
+        if self.is_resume && self.file_num > 0 {
+            let finished_size: u64 = self
+                .files
+                .iter()
+                .take(self.file_num as usize)
+                .map(|file| file.size)
+                .sum();
+            self.finished_size = finished_size;
+        }
+    }
+
     pub async fn write(&mut self, block: FileTransferBlock) -> ResultType<()> {
         if block.id != self.id {
             bail!("Wrong id");
@@ -806,6 +819,7 @@ impl TransferJob {
             file_num: self.file_num,
             last_modified,
             file_size: meta.len(),
+            is_resume: self.is_resume,
             ..Default::default()
         });
         msg.set_file_response(resp);
@@ -1203,13 +1217,14 @@ pub enum DigestCheckResult {
 
 #[inline]
 pub fn is_write_need_confirmation(
+    is_resume: bool,
     file_path: &str,
     digest: &FileTransferDigest,
 ) -> ResultType<DigestCheckResult> {
     let path = Path::new(file_path);
     let digest_file = format!("{}.digest", file_path);
     let download_file = format!("{}.download", file_path);
-    if Path::new(&digest_file).exists() && Path::new(&download_file).exists() {
+    if is_resume && Path::new(&digest_file).exists() && Path::new(&download_file).exists() {
         // If the digest file exists, it means the file was transferred before.
         // We can use the digest file to check whether the file is the same.
         if let Ok(content) = std::fs::read_to_string(digest_file) {
